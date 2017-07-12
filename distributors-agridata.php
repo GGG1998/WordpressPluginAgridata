@@ -29,6 +29,7 @@ if ( is_admin() && !class_exists('DistributorsAgridata')) {
             add_action('add_meta_boxes', array($this, 'add_meta'));
             add_action('admin_enqueue_scripts', array(&$this, 'admin_scripts'));
             add_action('save_post', array(&$this, 'save_meta_data'));
+            add_action('rest_api_init', array(&$this,'register_api'));
         }
 
         /** 
@@ -147,4 +148,47 @@ if ( is_admin() && !class_exists('DistributorsAgridata')) {
 if(class_exists('DistributorsAgridata')) {
     $agridata = new DistributorsAgridata();
 }
+
+function getDistributors( $data ) {
+    $args=array('post_type' => 'distributors','posts_per_page'=>-1);
+    $distributors=new WP_Query($args);
+    $arr=array();
+    if ( $distributors->have_posts() ) :
+        	while ( $distributors->have_posts() ) : $distributors->the_post();
+                $title=get_the_title();
+                $prov=get_post_meta(get_the_ID(),'distributors_prov',true);
+                $common=get_post_meta(get_the_ID(),'distributors_comm',true);
+                $values=array("title"=>$title,"province"=>array(),"community"=>array());
+                foreach($prov as $d)
+                   array_push($values['province'], $d['province_pk']);
+                foreach($common as $d)
+                   array_push($values['community'], $d['community_pk']);    
+                array_push($arr,$values);
+            endwhile;
+            wp_reset_postdata();
+    endif;
+ 
+  if ( empty( $arr ) ) {
+    return null;
+  }
+ 
+  $find_prov=$data['province_id'];
+  $find_comm=$data['community_id'];
+
+  $result=array();
+  foreach($arr as $element) {
+      for($i=0; $i<count($element['province']); $i++) {
+          if($find_prov==$element['province'][$i] && $find_comm==$element['community'][$i])
+            array_push($result,$element['title']);
+      }
+  }
+  
+  return json_encode($result);
+}
+add_action( 'rest_api_init', function () {
+  register_rest_route( 'distributors-agridata/v1', '/distributor/(?P<province_id>\d+)/(?P<community_id>\d+)', array(
+    'methods' => 'GET',
+    'callback' => 'getDistributors',
+  ) );
+} );
 ?>
